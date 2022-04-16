@@ -1,0 +1,48 @@
+{
+  "name": "reblok",
+  "version": "0.0.0",
+  "description": "1KB (GZipped) state manager for React. It is small and easy to use",
+  "author": "linq2js <linqtojs@gmail.com>",
+  "repository": {
+    "url": "https://github.com/linq2js/reblok"
+  },
+  "homepage": "https://linq2js.github.io/reblok/",
+  "license": "ISC",
+  "main": "dist/main.js",
+  "types": "dist/tsc/main.d.ts",
+  "directories": {
+    "lib": "lib"
+  },
+  "files": [
+    "lib",
+    "dist/tsc"
+  ],
+  "keywords": [
+    "redux",
+    "oop",
+    "model",
+    "state",
+    "state management",
+    "react"
+  ],
+  "peerDependencies": {
+    "react": "^16.8.3 || ^17 || ^18"
+  },
+  "peerDependenciesMeta": {
+    "react-dom": {
+      "optional": true
+    },
+    "react-native": {
+      "optional": true
+    }
+  },
+  "scripts": {
+    "prepublishOnly": "yarn test && yarn && yarn build",
+    "lint": "eslint lib/ --ext .js,.jsx,.ts,.tsx",
+    "test": "jest --passWithNoTests",
+    "clean": "rm -rf dist build package",
+    "ts-node": "ts-node",
+    "build": "rimraf dist && tsc && rollup -c rollup.config.js && gzip-size ./dist/main.js"
+  },
+  "gitHead": "32621a942d90ef236d6f8d72399df6d33b1b09d0"
+}
