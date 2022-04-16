@@ -1,6 +1,6 @@
 {
   "name": "reblok",
-  "version": "0.0.0",
+  "version": "0.0.1",
   "description": "1KB (GZipped) state manager for React. It is small and easy to use",
   "author": "linq2js <linqtojs@gmail.com>",
   "repository": {
