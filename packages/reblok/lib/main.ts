@@ -99,6 +99,8 @@ export function shallow(a: any, b: any) {
   return false;
 }
 
+type InferData<T> = T extends Promise<infer TResolved> ? TResolved : T;
+
 export interface DefaultExports {
   /**
    * create linked blok
@@ -118,7 +120,7 @@ export interface DefaultExports {
     ) => TResult,
     extraProps: TExtra,
     mode?: ConcurrentMode
-  ): Blok<TResult extends Promise<infer T> ? T : TResult> & TExtra;
+  ): Blok<InferData<TResult>> & TExtra;
 
   /**
    * create linked blok
@@ -137,7 +139,7 @@ export interface DefaultExports {
       abourController: AbortController
     ) => TResult,
     mode?: ConcurrentMode
-  ): Blok<TResult extends Promise<infer T> ? T : TResult>;
+  ): Blok<InferData<TResult>>;
 
   /**
    * perform mutation of multiple bloks, when the mutation done, all change notifications are triggered
@@ -150,12 +152,12 @@ export interface DefaultExports {
   <TData = any, TExtra extends {} = {}>(
     initialData: TData,
     extraProps: TExtra
-  ): Blok<TData> & TExtra;
+  ): Blok<InferData<TData>> & TExtra;
 
   /**
    * create a simple blok with initialData
    */
-  <TData = any>(initialData: TData): Blok<TData>;
+  <TData = any>(initialData: TData): Blok<InferData<TData>>;
 }
 
 let mutationCount = 0;
