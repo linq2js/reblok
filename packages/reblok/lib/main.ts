@@ -56,6 +56,11 @@ export interface Blok<T = any> {
    * wait until blok data is ready or blok has an error
    */
   wait(): Promise<T>;
+
+  /**
+   * reset blok data to initial data
+   */
+  reset(): void;
 }
 
 export function shallow(a: any, b: any) {
@@ -320,6 +325,7 @@ const create = (initialData: any) => {
     set,
     debounce: (ms, data) => set(data, debounce(ms)),
     throttle: (ms, data) => set(data, throttle(ms)),
+    reset: () => set(initialData),
     use: Use,
     wait,
     get loading() {
