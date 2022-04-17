@@ -41,3 +41,19 @@ test("batch mutation", () => {
   });
   expect(changes).toBe(1);
 });
+
+test("linked blok", async () => {
+  const token = blok("");
+  const profile = blok(token, (x) =>
+    Promise.resolve(
+      x ? { username: "authenticated" } : { username: "anonymous" }
+    )
+  );
+  expect(profile.loading).toBe(true);
+  await delay();
+  expect(profile.data.username).toBe("anonymous");
+  token.data = Math.random().toString();
+  expect(profile.loading).toBe(true);
+  await delay();
+  expect(profile.data.username).toBe("authenticated");
+});
