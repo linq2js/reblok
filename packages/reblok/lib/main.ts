@@ -20,7 +20,6 @@ export interface Blok<T = any> {
    * get current data of the blok
    */
   data: T;
-
   /**
    *
    * @param listener
