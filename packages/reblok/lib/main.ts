@@ -100,6 +100,9 @@ export function shallow(a: any, b: any) {
 }
 
 export interface DefaultExports {
+  /**
+   * create linked blok
+   */
   <TBloks, TResult = any, TExtra extends {} = {}>(
     bloks: TBloks,
     selector: (
@@ -117,6 +120,9 @@ export interface DefaultExports {
     mode?: ConcurrentMode
   ): Blok<TResult extends Promise<infer T> ? T : TResult> & TExtra;
 
+  /**
+   * create linked blok
+   */
   <TBloks, TResult = any>(
     bloks: TBloks,
     selector: (
@@ -133,19 +139,33 @@ export interface DefaultExports {
     mode?: ConcurrentMode
   ): Blok<TResult extends Promise<infer T> ? T : TResult>;
 
+  /**
+   * perform mutation of multiple bloks, when the mutation done, all change notifications are triggered
+   */
   <TData = void>(mutation: () => TData): TData;
 
+  /**
+   * create a simple blok with initialData and extraProps
+   */
   <TData = any, TExtra extends {} = {}>(
     initialData: TData,
     extraProps: TExtra
   ): Blok<TData> & TExtra;
 
+  /**
+   * create a simple blok with initialData
+   */
   <TData = any>(initialData: TData): Blok<TData>;
 }
 
 let mutationCount = 0;
 const changes = new Set<VoidFunction>();
 
+/**
+ * perform mutation of multiple bloks, when the mutation done, all change notifications are triggered
+ * @param mutation
+ * @returns
+ */
 const mutate = (mutation: Function) => {
   try {
     if (!mutationCount) {
@@ -191,11 +211,14 @@ export const throttle =
     }
   };
 
-const create = (initialData: any, extraProps: any) => {
-  let data: any;
+const create = <TData = any, TExtra extends {} = {}>(
+  initialData: TData,
+  extraProps?: TExtra
+): Blok<TData> & TExtra => {
+  let data: TData;
   let loading = false;
   let error: any;
-  let blok: Blok;
+  let blok: Blok<TData>;
   let waitPromise: Promise<any> | undefined;
   let abourController: AbortController | undefined;
   const context = {};
@@ -381,7 +404,7 @@ const create = (initialData: any, extraProps: any) => {
 
   set(initialData);
 
-  return blok;
+  return blok as any;
 };
 
 const from = (
@@ -422,6 +445,7 @@ const from = (
 };
 
 const defaultExports: DefaultExports = (...args: any[]) => {
+  // blok(mutation)
   if (typeof args[0] === "function") {
     return mutate(args[0]);
   }
