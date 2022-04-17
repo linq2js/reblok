@@ -1,6 +1,6 @@
 # reblok
 
-1KB (GZipped) state manager for React. It is tiny but powerful
+2KB (GZipped) state manager for React. It is tiny but powerful
 
 ## Installation
 

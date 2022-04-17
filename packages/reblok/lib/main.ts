@@ -2,6 +2,10 @@ import { useEffect, useRef, useState } from "react";
 
 export type Comparer<T> = (a: T, b: T) => boolean;
 
+export interface UpdateContext {
+  signal?: any;
+}
+
 export type ConcurrentMode = (
   context: Record<string, any>,
   callback: VoidFunction
@@ -10,7 +14,7 @@ export type ConcurrentMode = (
 export type Data<T> =
   | Promise<T>
   | T
-  | ((prev: T, abortController: AbortController) => T | Promise<T>);
+  | ((prev: T, context: UpdateContext) => T | Promise<T>);
 export interface Blok<T = any> {
   readonly error: any;
 
@@ -65,13 +69,31 @@ export interface Blok<T = any> {
    */
   reset(): void;
 
+  clearError(): void;
+
   /**
    * create an action that call specified reducer when invoking
    * @param reducer
    */
   action<TParams extends any[]>(
-    reducer: (prev: T, abortController: AbortController, ...args: TParams) => T
+    reducer: (prev: T, context: UpdateContext, ...args: TParams) => T
   ): (...args: TParams) => void;
+
+  define<
+    TActions extends {
+      [key: string]: (prev: T, context: UpdateContext, ...args: any[]) => T;
+    }
+  >(
+    actions: TActions
+  ): this & {
+    [key in keyof TActions]: TActions[key] extends (
+      prev: any,
+      ac: any,
+      ...args: infer TParams
+    ) => void
+      ? (...args: TParams) => void
+      : never;
+  };
 }
 
 export function shallow(a: any, b: any) {
@@ -132,7 +154,7 @@ export interface Create {
               : never;
           },
       prev: any,
-      abortController: AbortController
+      context: UpdateContext
     ) => TResult,
     extraProps: TExtra,
     mode?: ConcurrentMode
@@ -152,7 +174,7 @@ export interface Create {
               : never;
           },
       prev: any,
-      abortController: AbortController
+      context: UpdateContext
     ) => TResult,
     mode?: ConcurrentMode
   ): DisposableBlok<Blok<InferData<TResult>>>;
@@ -264,10 +286,12 @@ const create = <TData = any, TExtra extends {} = {}>(
     }
     try {
       if (typeof nextData === "function") {
+        const context: UpdateContext = {};
         if (typeof AbortController !== "undefined") {
           abortController = new AbortController();
+          context.signal = abortController.signal;
         }
-        nextData = nextData(data, abortController);
+        nextData = nextData(data, context);
       }
     } catch (e) {
       loading = false;
@@ -327,6 +351,13 @@ const create = <TData = any, TExtra extends {} = {}>(
     const errorPromise = Promise.reject(error);
     errorPromise.catch(() => {});
     return errorPromise;
+  };
+
+  const define = (actions: any): any => {
+    Object.entries(actions).forEach(([key, method]) => {
+      (blok as any)[key] = blok.action(method as any);
+    });
+    return blok;
   };
 
   const Use: Blok["use"] = (...args: any[]) => {
@@ -394,16 +425,20 @@ const create = <TData = any, TExtra extends {} = {}>(
     listen,
     get,
     set,
+    define,
     debounce: (ms, data) => set(data, debounce(ms)),
     throttle: (ms, data) => set(data, throttle(ms)),
     reset: () => set(initialData),
+    clearError() {
+      if (!error) return;
+      error = undefined;
+      notify();
+    },
     use: Use,
     wait,
     action(f: Function): any {
       return (...args: any[]) =>
-        set((prev: TData, abortController: AbortController) =>
-          f(prev, abortController, ...args)
-        );
+        set((prev: TData, context: UpdateContext) => f(prev, context, ...args));
     },
     get loading() {
       return loading;
@@ -439,7 +474,7 @@ const from = (
   const entries = single
     ? Object.entries({ value: bloks } as Record<string, Blok>)
     : Object.entries(bloks as Record<string, Blok>);
-  const select = (prev?: any, abortController?: any) => {
+  const select = (prev?: any, context?: any) => {
     return selector(
       single
         ? bloks.data
@@ -448,12 +483,27 @@ const from = (
             return obj;
           }, {} as any),
       prev,
-      abortController
+      context
     );
   };
   const handleChange = () => {
-    const notReady = entries.some(([, x]) => x.loading || x.error);
-    if (notReady) {
+    let loadingCount = 0;
+    let errorCount = 0;
+    let firstError: any;
+    entries.forEach(([, x]) => {
+      if (x.loading) {
+        loadingCount++;
+      } else if (x.error) {
+        errorCount++;
+        if (!firstError) firstError = x.error;
+      }
+    });
+    // all blok have errors
+    if (errorCount === entries.length) {
+      blok.set(() => {
+        throw firstError;
+      });
+    } else if (loadingCount) {
       blok.set(forever);
     } else {
       blok.set(select, mode);
@@ -522,7 +572,7 @@ const family = <TKey = any, TBlok extends Blok = Blok>(
   };
 };
 
-const defaultExports: Create = (...args: any[]) => {
+const blok: Create = (...args: any[]) => {
   // blok(factory)
   if (typeof args[0] === "function") {
     return family(args[0], args[1]);
@@ -539,4 +589,4 @@ const defaultExports: Create = (...args: any[]) => {
   return create(args[0], args[1]);
 };
 
-export default defaultExports;
+export default blok;
