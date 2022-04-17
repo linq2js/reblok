@@ -44,10 +44,12 @@ export interface Blok<T = any> {
   get(): T;
   /**
    * bind the blok to the React component and return the blok data
+   * Note: this is React hook so you must follow hook rules to use this: https://reactjs.org/docs/hooks-rules.html
    */
   use(): T;
   /**
-   * bind the blok to the React component and return selected slice of the blok data
+   * bind the blok to the React component and return selected slice of the blok data.
+   * Note: this is React hook so you must follow hook rules to use this: https://reactjs.org/docs/hooks-rules.html
    * @param selector
    * @param compare
    */

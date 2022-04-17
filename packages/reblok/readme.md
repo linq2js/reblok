@@ -83,6 +83,8 @@ blok(() => {
 
 ## API Reference
 
+Docs: https://linq2js.github.io/reblok/
+
 ### Default Export: blok(initialData): Blok
 
 ### Default Export: blok(sourceBlok, selector, concurrentMode?): Blok
