@@ -10,7 +10,7 @@ export type ConcurrentMode = (
 export type Data<T> =
   | Promise<T>
   | T
-  | ((prev: T, abourController: AbortController) => T | Promise<T>);
+  | ((prev: T, abortController: AbortController) => T | Promise<T>);
 export interface Blok<T = any> {
   readonly error: any;
 
@@ -64,6 +64,14 @@ export interface Blok<T = any> {
    * reset blok data to initial data
    */
   reset(): void;
+
+  /**
+   * create an action that call specified reducer when invoking
+   * @param reducer
+   */
+  action<TParams extends any[]>(
+    reducer: (prev: T, abortController: AbortController, ...args: TParams) => T
+  ): (...args: TParams) => void;
 }
 
 export function shallow(a: any, b: any) {
@@ -101,7 +109,15 @@ export function shallow(a: any, b: any) {
 
 type InferData<T> = T extends Promise<infer TResolved> ? TResolved : T;
 
-export interface DefaultExports {
+export interface Create {
+  /**
+   * create family of blok
+   */
+  <TKey = any, TBlok extends Blok = Blok>(
+    factory: (key: TKey) => TBlok,
+    compare?: Comparer<TKey>
+  ): Family<TKey, TBlok>;
+
   /**
    * create linked blok
    */
@@ -116,11 +132,11 @@ export interface DefaultExports {
               : never;
           },
       prev: any,
-      abourController: AbortController
+      abortController: AbortController
     ) => TResult,
     extraProps: TExtra,
     mode?: ConcurrentMode
-  ): Blok<InferData<TResult>> & TExtra;
+  ): DisposableBlok<Blok<InferData<TResult>>> & TExtra;
 
   /**
    * create linked blok
@@ -136,15 +152,10 @@ export interface DefaultExports {
               : never;
           },
       prev: any,
-      abourController: AbortController
+      abortController: AbortController
     ) => TResult,
     mode?: ConcurrentMode
-  ): Blok<InferData<TResult>>;
-
-  /**
-   * perform mutation of multiple bloks, when the mutation done, all change notifications are triggered
-   */
-  <TData = void>(mutation: () => TData): TData;
+  ): DisposableBlok<Blok<InferData<TResult>>>;
 
   /**
    * create a simple blok with initialData and extraProps
@@ -168,7 +179,7 @@ const changes = new Set<VoidFunction>();
  * @param mutation
  * @returns
  */
-const mutate = (mutation: Function) => {
+export const batch = <TResult>(mutation: () => TResult): TResult => {
   try {
     if (!mutationCount) {
       changes.clear();
@@ -222,7 +233,7 @@ const create = <TData = any, TExtra extends {} = {}>(
   let error: any;
   let blok: Blok<TData>;
   let waitPromise: Promise<any> | undefined;
-  let abourController: AbortController | undefined;
+  let abortController: AbortController | undefined;
   const context = {};
   const listeners = new Array<VoidFunction>();
   const notify = () => {
@@ -245,7 +256,7 @@ const create = <TData = any, TExtra extends {} = {}>(
   const get = () => data;
   const set = (nextData: any, mode?: ConcurrentMode): boolean => {
     // cancel prev http request if any
-    abourController?.abort();
+    abortController?.abort();
 
     if (mode) {
       mode(context, () => set(nextData));
@@ -254,9 +265,9 @@ const create = <TData = any, TExtra extends {} = {}>(
     try {
       if (typeof nextData === "function") {
         if (typeof AbortController !== "undefined") {
-          abourController = new AbortController();
+          abortController = new AbortController();
         }
-        nextData = nextData(data, abourController);
+        nextData = nextData(data, abortController);
       }
     } catch (e) {
       loading = false;
@@ -388,6 +399,12 @@ const create = <TData = any, TExtra extends {} = {}>(
     reset: () => set(initialData),
     use: Use,
     wait,
+    action(f: Function): any {
+      return (...args: any[]) =>
+        set((prev: TData, abortController: AbortController) =>
+          f(prev, abortController, ...args)
+        );
+    },
     get loading() {
       return loading;
     },
@@ -409,6 +426,8 @@ const create = <TData = any, TExtra extends {} = {}>(
   return blok as any;
 };
 
+const forever = new Promise(() => {});
+
 const from = (
   bloks: any,
   selector: Function,
@@ -420,7 +439,7 @@ const from = (
   const entries = single
     ? Object.entries({ value: bloks } as Record<string, Blok>)
     : Object.entries(bloks as Record<string, Blok>);
-  const select = (prev?: any, abourController?: any) => {
+  const select = (prev?: any, abortController?: any) => {
     return selector(
       single
         ? bloks.data
@@ -429,27 +448,84 @@ const from = (
             return obj;
           }, {} as any),
       prev,
-      abourController
+      abortController
     );
   };
   const handleChange = () => {
-    blok.set(
-      (prev: any, abourController: any) => select(prev, abourController),
-      mode
-    );
+    const notReady = entries.some(([, x]) => x.loading || x.error);
+    if (notReady) {
+      blok.set(forever);
+    } else {
+      blok.set(select, mode);
+    }
   };
-  entries.forEach(([, x]) =>
-    x.listen(() => !x.loading && !x.error && handleChange())
-  );
+  const unsubscribes = entries.map(([, x]) => x.listen(handleChange));
   blok = create(undefined, extraProps);
   handleChange();
-  return blok;
+  return Object.assign(blok, {
+    dispose() {
+      while (unsubscribes.length) {
+        unsubscribes.shift()?.();
+      }
+    },
+  });
 };
 
-const defaultExports: DefaultExports = (...args: any[]) => {
-  // blok(mutation)
+type DisposableBlok<TBlok> = TBlok & { dispose(): void };
+
+export interface Family<TKey, TBlok extends Blok> {
+  get(key: TKey): DisposableBlok<TBlok>;
+  clear(): void;
+}
+
+const family = <TKey = any, TBlok extends Blok = Blok>(
+  factory: (key: TKey) => TBlok,
+  compare: Comparer<TKey> = shallow
+): Family<TKey, TBlok> => {
+  const map = new Map<any, DisposableBlok<TBlok>>();
+
+  const findMember = (key: any): [any, DisposableBlok<TBlok> | undefined] => {
+    if (key && (typeof key === "object" || Array.isArray(key))) {
+      const keyIterator = map.entries();
+      while (true) {
+        const { value, done } = keyIterator.next();
+        if (done) break;
+        if (compare(value[0], key)) {
+          return value;
+        }
+      }
+      return [undefined, undefined];
+    } else {
+      return [key, map.get(key)];
+    }
+  };
+
+  return {
+    get(key) {
+      let [mapKey = key, member] = findMember(key);
+      if (!member) {
+        const original = factory(key);
+        const originalDispose = (original as any).dispose;
+        member = Object.assign(original, {
+          dispose() {
+            originalDispose?.();
+            map.delete(key);
+          },
+        });
+        map.set(mapKey, member);
+      }
+      return member;
+    },
+    clear() {
+      map.clear();
+    },
+  };
+};
+
+const defaultExports: Create = (...args: any[]) => {
+  // blok(factory)
   if (typeof args[0] === "function") {
-    return mutate(args[0]);
+    return family(args[0], args[1]);
   }
   if (typeof args[1] === "function") {
     if (typeof args[2] === "function") {

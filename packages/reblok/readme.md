@@ -68,12 +68,12 @@ const counter = blok(0);
 counter.set((prev) => prev + 1);
 ```
 
-### Updating multiple bloks
+### Batch updating
 
 ```js
-import blok from "reblok";
+import { batch } from "reblok";
 
-blok(() => {
+batch(() => {
   counter.data++;
   counter.data++;
   counter.data++;

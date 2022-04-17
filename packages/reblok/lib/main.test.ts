@@ -1,4 +1,4 @@
-import blok from "./main";
+import blok, { batch } from "./main";
 
 const delay = <T = any>(ms = 0, value?: T) =>
   new Promise<T>((resolve) => setTimeout(resolve, ms, value));
@@ -31,7 +31,7 @@ test("batch mutation", () => {
   let changes = 0;
   const counter = blok(0);
   counter.listen(() => changes++);
-  blok(() => {
+  batch(() => {
     counter.data++;
     counter.data++;
     counter.data++;

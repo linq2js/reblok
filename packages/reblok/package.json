@@ -44,5 +44,9 @@
     "ts-node": "ts-node",
     "build": "rimraf dist && tsc && rollup -c rollup.config.js && gzip-size ./dist/main.js"
   },
-  "gitHead": "32621a942d90ef236d6f8d72399df6d33b1b09d0"
+  "gitHead": "32621a942d90ef236d6f8d72399df6d33b1b09d0",
+  "devDependencies": {
+    "@types/node-fetch": "^2.6.1",
+    "node-fetch": "^3.2.3"
+  }
 }
