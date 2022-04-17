@@ -54,6 +54,8 @@ export interface Blok<T = any> {
    * @param compare
    */
   use<R>(selector: (blok: this) => R, compare?: Comparer<R>): R;
+
+  use(defaultValue: T): T;
   /**
    * wait until blok data is ready or blok has an error
    */
@@ -99,8 +101,23 @@ export function shallow(a: any, b: any) {
 }
 
 export interface DefaultExports {
-  <T = void>(mutation: () => T): T;
-  <T = any>(initialData: T): Blok<T>;
+  <TBloks, TResult = any, TExtra extends {} = {}>(
+    bloks: TBloks,
+    selector: (
+      data: TBloks extends Blok<infer T>
+        ? T
+        : {
+            [key in keyof TBloks]: TBloks[key] extends Blok<infer T>
+              ? T
+              : never;
+          },
+      prev: any,
+      abourController: AbortController
+    ) => TResult,
+    extraProps: TExtra,
+    mode?: ConcurrentMode
+  ): Blok<TResult extends Promise<infer T> ? T : TResult> & TExtra;
+
   <TBloks, TResult = any>(
     bloks: TBloks,
     selector: (
@@ -116,6 +133,15 @@ export interface DefaultExports {
     ) => TResult,
     mode?: ConcurrentMode
   ): Blok<TResult extends Promise<infer T> ? T : TResult>;
+
+  <TData = void>(mutation: () => TData): TData;
+
+  <TData = any, TExtra extends {} = {}>(
+    initialData: TData,
+    extraProps: TExtra
+  ): Blok<TData> & TExtra;
+
+  <TData = any>(initialData: TData): Blok<TData>;
 }
 
 let mutationCount = 0;
@@ -166,7 +192,7 @@ export const throttle =
     }
   };
 
-const create = (initialData: any) => {
+const create = (initialData: any, extraProps: any) => {
   let data: any;
   let loading = false;
   let error: any;
@@ -268,22 +294,30 @@ const create = (initialData: any) => {
     return errorPromise;
   };
 
-  const Use = (selector?: Function, compare?: Function) => {
+  const Use: Blok["use"] = (...args: any[]) => {
     const selectorRef = useRef<Function>();
     const prevDataRef = useRef<any>();
     const compareRef = useRef<Function>();
     const errorRef = useRef<any>();
     const activeRef = useRef(true);
     const rerender = useState<any>()[1];
+    let hasDefaultValue = false;
+    let defaultValue: any;
+    if (typeof args[0] === "function") {
+      [selectorRef.current, compareRef.current] = args;
+    } else {
+      [hasDefaultValue, defaultValue, selectorRef.current] = [
+        !!args.length,
+        args[0],
+        () => {
+          if (hasDefaultValue && (error || loading)) return defaultValue;
+          if (error) throw error;
+          if (loading) throw wait();
+          return data;
+        },
+      ];
+    }
 
-    selectorRef.current =
-      selector ??
-      (() => {
-        if (error) throw error;
-        if (loading) throw wait();
-        return data;
-      });
-    compareRef.current = compare;
     activeRef.current = true;
 
     useEffect(
@@ -342,6 +376,8 @@ const create = (initialData: any) => {
     set data(value) {
       set(value);
     },
+    // DONT PUT extraProps before default props, the prop getters becomes useless
+    ...extraProps,
   };
 
   set(initialData);
@@ -349,7 +385,12 @@ const create = (initialData: any) => {
   return blok;
 };
 
-const from = (bloks: any, selector: Function, mode?: ConcurrentMode) => {
+const from = (
+  bloks: any,
+  selector: Function,
+  extraProps: any,
+  mode?: ConcurrentMode
+) => {
   let blok: Blok;
   const single = typeof bloks.listen === "function";
   const entries = single
@@ -376,7 +417,7 @@ const from = (bloks: any, selector: Function, mode?: ConcurrentMode) => {
   entries.forEach(([, x]) =>
     x.listen(() => !x.loading && !x.error && handleChange())
   );
-  blok = create(undefined);
+  blok = create(undefined, extraProps);
   handleChange();
   return blok;
 };
@@ -386,9 +427,15 @@ const defaultExports: DefaultExports = (...args: any[]) => {
     return mutate(args[0]);
   }
   if (typeof args[1] === "function") {
-    return from(args[0], args[1], args[2]);
+    if (typeof args[2] === "function") {
+      // blok(bloks, selector, mode)
+      return from(args[0], args[1], undefined, args[2]);
+    }
+    // blok(bloks, selector, extraProps, mode)
+    return from(args[0], args[1], args[2], args[3]);
   }
-  return create(args[0]);
+  // blok(initialData, extraProps?)
+  return create(args[0], args[1]);
 };
 
 export default defaultExports;
