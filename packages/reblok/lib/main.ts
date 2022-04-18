@@ -154,7 +154,7 @@ function createUpdateContext(): UpdateContext {
       if (!abortController && abortControllerSupported) {
         abortController = new AbortController();
       }
-      return abortController;
+      return abortController?.signal;
     },
     cancel() {
       abortController?.abort();
@@ -164,12 +164,13 @@ function createUpdateContext(): UpdateContext {
 
 export function create<TData, TProps, TActions extends Actions<TData>>(
   initialData: UpdateData<TData>,
-  options?: BlokOptions<TProps, TActions>
+  options?: BlokOptions<TData, TProps, TActions>
 ): Blok<TData> & TProps & ExtraActions<TActions> {
   type State = { loading: boolean; data: TData; error: any };
 
   const changeEmitter = createEmitter();
   const context = {};
+  const compare = options?.compare ?? Object.is;
 
   let blok: Blok<TData>;
   let waitPromise: Promise<TData> | undefined;
@@ -277,7 +278,9 @@ export function create<TData, TProps, TActions extends Actions<TData>>(
 
       // state changed
       changeState({
-        data: nextData as TData,
+        data: compare(nextData as TData, state.data)
+          ? state.data
+          : (nextData as TData),
         error: undefined,
         loading: false,
       });
@@ -452,7 +455,7 @@ const forever = new Promise(() => {});
 export function from<TData, TSource, TProps, TActions extends Actions<TData>>(
   source: any,
   selector: Selector<TSource, TData>,
-  options?: LinkedBlokOptions<TProps, TActions>
+  options?: LinkedBlokOptions<TData, TProps, TActions>
 ): Blok<TData> & TProps & ExtraActions<TActions> {
   let blok: Blok<TData>;
   const single = typeof source.listen === "function";

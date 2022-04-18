@@ -113,13 +113,14 @@ export interface FamilyOptions<TKey> {
   compare?: Comparer<TKey>;
 }
 
-export interface BlokOptions<TProps, TActions> {
+export interface BlokOptions<TData, TProps, TActions> {
+  compare?: Comparer<TData>;
   props?: TProps;
   actions?: TActions;
 }
 
-export interface LinkedBlokOptions<TProps, TActions>
-  extends BlokOptions<TProps, TActions> {
+export interface LinkedBlokOptions<TData, TProps, TActions>
+  extends BlokOptions<TData, TProps, TActions> {
   mode?: ConcurrentMode;
 }
 
@@ -153,13 +154,13 @@ export interface Create extends Function {
   <TData, TSource, TProps, TActions extends Actions<TData>>(
     source: TSource,
     selector: Selector<TSource, TData>,
-    options: LinkedBlokOptions<TProps, TActions>
+    options: LinkedBlokOptions<TData, TProps, TActions>
   ): Blok<TData> & TProps & ExtraActions<TActions>;
 
   <TData>(data: UpdateData<TData>): Blok<TData>;
 
   <TData, TProps, TActions extends Actions<TData>>(
     data: UpdateData<TData>,
-    options?: BlokOptions<TProps, TActions>
+    options?: BlokOptions<TData, TProps, TActions>
   ): Blok<TData> & TProps & ExtraActions<TActions>;
 }
