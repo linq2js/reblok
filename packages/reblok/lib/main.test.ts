@@ -1,4 +1,4 @@
-import blok, { batch } from "./main";
+import { blok, batch } from "./main";
 
 const delay = <T = any>(ms = 0, value?: T) =>
   new Promise<T>((resolve) => setTimeout(resolve, ms, value));
@@ -13,6 +13,30 @@ test("reducer", () => {
   const counter = blok(0);
   counter.set((prev) => prev + 1);
   expect(counter.data).toBe(1);
+});
+
+test("lazyInit (sync)", () => {
+  let initialized = false;
+  const counter = blok(() => {
+    initialized = true;
+    return 0;
+  });
+  expect(initialized).toBe(false);
+  expect(counter.data).toBe(0);
+  expect(initialized).toBe(true);
+});
+
+test("lazyInit (async)", async () => {
+  let initialized = false;
+  const counter = blok(() => {
+    initialized = true;
+    return delay(10, 5);
+  });
+  expect(initialized).toBe(false);
+  expect(counter.data).toBeUndefined();
+  expect(initialized).toBe(true);
+  await delay(15);
+  expect(counter.data).toBe(5);
 });
 
 test("async data", async () => {

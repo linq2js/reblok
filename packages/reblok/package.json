@@ -47,6 +47,7 @@
   "gitHead": "32621a942d90ef236d6f8d72399df6d33b1b09d0",
   "devDependencies": {
     "@types/node-fetch": "^2.6.1",
-    "node-fetch": "^3.2.3"
+    "node-fetch": "^3.2.3",
+    "rollup-plugin-terser": "^7.0.2"
   }
 }

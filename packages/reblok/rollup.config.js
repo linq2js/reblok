@@ -1,4 +1,4 @@
-import { uglify } from "rollup-plugin-uglify";
+import { terser } from "rollup-plugin-terser";
 
 export default {
   input: "./dist/tsc/main.js",
@@ -7,5 +7,5 @@ export default {
     format: "cjs",
     indent: false,
   },
-  plugins: [uglify()],
+  plugins: [terser()],
 };
