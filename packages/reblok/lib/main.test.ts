@@ -1,4 +1,4 @@
-import { blok, batch } from "./main";
+import { blok, batch, droppable } from "./main";
 
 const delay = <T = any>(ms = 0, value?: T) =>
   new Promise<T>((resolve) => setTimeout(resolve, ms, value));
@@ -80,4 +80,14 @@ test("linked blok", async () => {
   expect(profile.loading).toBe(true);
   await delay();
   expect(profile.data.username).toBe("authenticated");
+});
+
+test("droppable", async () => {
+  const counter = blok(0);
+  counter.set(delay(10, 1), droppable());
+  // skip 2 updates
+  counter.set(delay(5, 2), droppable());
+  counter.set(delay(5, 3), droppable());
+  await delay(15);
+  expect(counter.data).toBe(1);
 });

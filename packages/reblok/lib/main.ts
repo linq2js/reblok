@@ -3,6 +3,7 @@ import {
   Actions,
   Blok,
   BlokOptions,
+  ConcurrentController,
   ConcurrentMode,
   Create,
   Emitter,
@@ -128,6 +129,22 @@ export const debounce =
     context.debounceTimer = setTimeout(callback, ms);
   };
 
+export const droppable = (): ConcurrentMode => (context, callback) => {
+  if (context.updatingToken) {
+    console.log("skip");
+    return;
+  }
+  const token = (context.updatingToken = {});
+  callback();
+  return {
+    done() {
+      if (token === context.updatingToken) {
+        delete context.updatingToken;
+      }
+    },
+  };
+};
+
 /**
  * limit one updating in X milliseconds
  * @param ms
@@ -169,7 +186,7 @@ export function create<TData, TProps, TActions extends Actions<TData>>(
   type State = { loading: boolean; data: TData; error: any };
 
   const changeEmitter = createEmitter();
-  const context = {};
+  const concurrentContext: Record<string, any> = {};
   const compare = options?.compare ?? Object.is;
 
   let blok: Blok<TData>;
@@ -177,6 +194,7 @@ export function create<TData, TProps, TActions extends Actions<TData>>(
   let lazyInit = typeof initialData === "function";
   let initialized = !lazyInit;
   let lastUpdateContext: UpdateContext | undefined;
+  let concurrentController: ConcurrentController | void;
   let state: State = {
     data: undefined as any,
     loading: false,
@@ -236,16 +254,20 @@ export function create<TData, TProps, TActions extends Actions<TData>>(
     },
     set(nextData, mode) {
       lastUpdateContext?.cancel();
+      concurrentController?.dispose?.();
+      let cc: ConcurrentController | void | undefined;
 
       if (mode) {
-        mode(context, () => blok.set(nextData));
+        cc = concurrentController = mode(concurrentContext, () =>
+          blok.set(nextData)
+        );
         return;
       }
 
       try {
         if (typeof nextData === "function") {
-          const context = createUpdateContext();
-          nextData = (nextData as Updater<TData>)(blok.data, context);
+          const updateContext = createUpdateContext();
+          nextData = (nextData as Updater<TData>)(blok.data, updateContext);
         }
       } catch (e) {
         changeState({ loading: false, error: e });
@@ -258,7 +280,12 @@ export function create<TData, TProps, TActions extends Actions<TData>>(
         const snapshot = state;
         (nextData as any).then(
           (value: any) => {
+            if (typeof cc === "object") {
+              cc.done?.();
+            }
+
             if (snapshot !== state) return;
+
             changeState({
               data: value,
               loading: false,
@@ -266,6 +293,9 @@ export function create<TData, TProps, TActions extends Actions<TData>>(
             });
           },
           (e: any) => {
+            if (typeof cc === "object") {
+              cc.done?.(e);
+            }
             if (snapshot !== state) return;
             changeState({
               loading: false,
@@ -276,6 +306,9 @@ export function create<TData, TProps, TActions extends Actions<TData>>(
         return;
       }
 
+      if (typeof cc === "object") {
+        cc.done?.();
+      }
       // state changed
       changeState({
         data: compare(nextData as TData, state.data)
@@ -288,9 +321,9 @@ export function create<TData, TProps, TActions extends Actions<TData>>(
     get() {
       return blok.data;
     },
-    action(f: Function): any {
+    action(f: Function, mode): any {
       return (...outer: any[]) =>
-        blok.set((...inner: any[]) => f.apply(null, outer.concat(inner)));
+        blok.set((...inner: any[]) => f.apply(null, outer.concat(inner)), mode);
     },
     listen: changeEmitter.add,
     wait() {
@@ -327,12 +360,12 @@ export function create<TData, TProps, TActions extends Actions<TData>>(
       const ref = useRef<ComponentContext>({}).current;
       ref.rerender = useState<any>()[1];
 
-      let hasDefaultValue = false;
-      let defaultValue: any;
       // use(selector, compare?)
       if (typeof args[0] === "function") {
         [ref.selector, ref.compare = Object.is] = args;
       } else {
+        let hasDefaultValue = false;
+        let defaultValue: any;
         // use()
         ref.compare = Object.is;
         [hasDefaultValue, defaultValue, ref.selector] = [
@@ -403,6 +436,8 @@ export function create<TData, TProps, TActions extends Actions<TData>>(
   if (!lazyInit) {
     blok.set(initialData);
   }
+
+  concurrentContext.blok = blok;
 
   return blok as any;
 }
@@ -515,17 +550,17 @@ export function from<TData, TSource, TProps, TActions extends Actions<TData>>(
 
 export const blok: Create = (...args: any[]): any => {
   if (typeof args[1] === "function") {
-    const [source, selector, options] = args;
-    return from(source, selector, options);
+    // blok(source, selector, options?)
+    return from(args[0], args[1], args[2]);
   }
   if (
     Array.isArray(args[0]) &&
     args[0].length === 1 &&
     typeof args[0][0] === "function"
   ) {
-    const [[factory], options] = args;
-    return family(factory, options);
+    // blok([factory], options?)
+    return family(args[0][0], args[1]);
   }
-  const [data, options] = args;
-  return create(data, options);
+  // blok(data, options?)
+  return create(args[0], args[1]);
 };

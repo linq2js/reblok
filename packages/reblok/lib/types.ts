@@ -23,10 +23,15 @@ export type Data<TData> = TData extends Function
 
 export type Actions<T> = { [key: string]: Updater<T, any[]> };
 
+export interface ConcurrentController {
+  done?(error?: any): void;
+  dispose?(): void;
+}
+
 export type ConcurrentMode = (
   context: Record<string, any>,
   callback: VoidFunction
-) => void;
+) => ConcurrentController | void;
 
 export interface UpdateContext {
   signal?: any;
@@ -96,7 +101,8 @@ export interface Blok<TData = any> {
    * @param updater
    */
   action<TParams extends any[]>(
-    updater: Updater<TData, TParams>
+    updater: Updater<TData, TParams>,
+    mode?: ConcurrentMode
   ): (...args: TParams) => void;
 }
 
