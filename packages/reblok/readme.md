@@ -25,7 +25,7 @@ https://codesandbox.io/s/reblok-demo-5ksi6t
 ### Counter App (3 lines of code)
 
 ```jsx
-import blok from "reblok";
+import { blok } from "reblok";
 // creating a blok with initial data
 const counter = blok(0);
 // using use() method to bind the blok to React component
@@ -35,7 +35,7 @@ const App = () => <h1 onClick={() => counter.data++}>{counter.use()}</h1>;
 ### Async data
 
 ```jsx
-import blok from "reblok";
+import { blok } from "reblok";
 // block data can be promise object
 const userProfile = blok(
   fetch("https://jsonplaceholder.typicode.com/users/1").then((res) =>
@@ -62,7 +62,7 @@ const App = () => (
 ### Updating blok using reducer
 
 ```js
-import blok from "reblok";
+import { blok } from "reblok";
 
 const counter = blok(0);
 counter.set((prev) => prev + 1);
@@ -177,7 +177,7 @@ const { id, username } = profile.use(
 Delay updating in X milliseconds
 
 ```js
-import blok, { debounce } from "reblok";
+import { blok, debounce } from "reblok";
 
 function updateCounter() {
   counter.set((prev) => prev + 1, debounce(500));
@@ -193,7 +193,7 @@ updateCounter(); // counter = 0
 ### throttle(ms)
 
 ```js
-import blok, { throttle } from "reblok";
+import { blok, throttle } from "reblok";
 
 const counter = blok(0);
 
