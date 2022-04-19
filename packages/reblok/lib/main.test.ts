@@ -1,4 +1,4 @@
-import { blok, batch, droppable } from "./main";
+import { blok, batch, droppable, hydrate, dehyrate } from "./main";
 
 const delay = <T = any>(ms = 0, value?: T) =>
   new Promise<T>((resolve) => setTimeout(resolve, ms, value));
@@ -90,4 +90,14 @@ test("droppable", async () => {
   counter.set(delay(5, 3), droppable());
   await delay(15);
   expect(counter.data).toBe(1);
+});
+
+test("hydrate", () => {
+  const hydration = hydrate();
+  const counter1 = blok(0, { hydrate: hydration("counter") });
+  counter1.data++;
+  const data = dehyrate();
+  hydrate(data);
+  const counter2 = blok(0, { hydrate: hydration("counter") });
+  expect(counter2.data).toBe(1);
 });

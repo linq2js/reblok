@@ -6,10 +6,12 @@ import {
   ConcurrentController,
   ConcurrentMode,
   Create,
+  DehydratedDataCollection,
   Emitter,
   ExtraActions,
   Family,
   FamilyOptions,
+  Hydration,
   LinkedBlokOptions,
   Selector,
   UpdateContext,
@@ -433,8 +435,20 @@ export function create<TData, TProps, TActions extends Actions<TData>>(
     }
   }
 
-  if (!lazyInit) {
-    blok.set(initialData);
+  if (options?.hydrate) {
+    const [hydrated, value] = options.hydrate(blok.get);
+    if (hydrated) {
+      state.data = value;
+      initialized = true;
+    } else {
+      if (!lazyInit) {
+        blok.set(initialData);
+      }
+    }
+  } else {
+    if (!lazyInit) {
+      blok.set(initialData);
+    }
   }
 
   concurrentContext.blok = blok;
@@ -564,3 +578,93 @@ export const blok: Create = (...args: any[]): any => {
   // blok(data, options?)
   return create(args[0], args[1]);
 };
+
+type HydratedData = {
+  data?: any;
+  members?: Map<any, HydratedData>;
+  get?: () => any;
+};
+const hydratedData = new Map<any, HydratedData>();
+
+/**
+ * hydrate adds a previously dehydrated state into a cache.
+ * If the bloks included in dehydration already exist in the cache, hydrate does not overwrite them.
+ * @param collection
+ * @returns
+ */
+export function hydrate(collection?: DehydratedDataCollection) {
+  if (collection) {
+    for (const [blokKey, blokData] of collection) {
+      // is family
+      if (blokData.members) {
+        hydratedData.set(blokKey, {
+          members: new Map<any, any>(
+            blokData.members.map(([memberKey, memberData]) => [
+              memberKey,
+              { data: memberData },
+            ])
+          ),
+        });
+      } else {
+        hydratedData.set(blokKey, { data: blokData.data });
+      }
+    }
+  }
+  return function (blokKey: any, memberKey?: any): Hydration {
+    const hasMemberKey = arguments.length > 1;
+
+    return (get) => {
+      let hydrated = true;
+      let item = hydratedData.get(blokKey);
+      if (!item) {
+        hydrated = false;
+        item = {};
+        if (hasMemberKey) {
+          const family: HydratedData = {
+            members: new Map<any, HydratedData>(),
+          };
+          family.members?.set(memberKey, item);
+        } else {
+          hydratedData.set(blokKey, item);
+        }
+      } else {
+        if (hasMemberKey) {
+          let member = item.members?.get(memberKey);
+          if (!member) {
+            hydrated = false;
+            member = {};
+            item.members?.set(memberKey, member);
+          }
+          item = member;
+        }
+      }
+      item.get = get;
+      return [hydrated, item.data];
+    };
+  };
+}
+
+/**
+ * dehydrate creates a frozen representation of a cache that can later be hydrated with hydrate().
+ * This is useful for passing prefetched blok data from server to client or persisting blok data to localStorage or other persistent locations.
+ * It only includes currently using blok by default.
+ * @returns
+ */
+export function dehyrate() {
+  const collection: DehydratedDataCollection = [];
+  for (const [blokKey, blokData] of hydratedData) {
+    if (blokData.members) {
+      const members: [any, any][] = [];
+      for (const [memberKey, memberData] of blokData.members) {
+        if (!memberData.get) continue;
+        members.push([memberKey, memberData.get()]);
+      }
+      collection.push([blokKey, { members }]);
+      continue;
+    }
+
+    if (!blokData.get) continue;
+    collection.push([blokKey, { data: blokData.get() }]);
+  }
+  return collection;
+}

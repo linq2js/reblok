@@ -117,12 +117,14 @@ export interface Family<TBlok extends Blok<any>, TKey> {
 
 export interface FamilyOptions<TKey> {
   compare?: Comparer<TKey>;
+  hydrate?: Hydration;
 }
 
 export interface BlokOptions<TData, TProps, TActions> {
   compare?: Comparer<TData>;
   props?: TProps;
   actions?: TActions;
+  hydrate?: Hydration;
 }
 
 export interface LinkedBlokOptions<TData, TProps, TActions>
@@ -170,3 +172,9 @@ export interface Create extends Function {
     options?: BlokOptions<TData, TProps, TActions>
   ): Blok<TData> & TProps & ExtraActions<TActions>;
 }
+
+export type Hydration = (get: () => any) => [boolean, any];
+
+export type DehydratedData = { data?: any; members?: [any, any][] };
+
+export type DehydratedDataCollection = [any, DehydratedData][];
