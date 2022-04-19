@@ -12,6 +12,7 @@ import {
   Family,
   FamilyOptions,
   Hydration,
+  HydrationOptions,
   LinkedBlokOptions,
   Selector,
   UpdateContext,
@@ -29,21 +30,23 @@ let batchChanges = new Set<VoidFunction>();
  * @param mutation
  * @returns
  */
-export const batch = <TResult>(mutation: () => TResult): TResult => {
-  try {
-    if (!mutationCount) {
-      batchChanges = new Set();
-    }
-    mutationCount++;
-    return mutation();
-  } finally {
-    mutationCount--;
-    if (!mutationCount) {
-      for (const x of batchChanges) {
-        x();
+export const batch = <T extends Function>(mutation: T): T => {
+  return ((...args: any[]) => {
+    try {
+      if (!mutationCount) {
+        batchChanges = new Set();
+      }
+      mutationCount++;
+      return mutation(...args);
+    } finally {
+      mutationCount--;
+      if (!mutationCount) {
+        for (const x of batchChanges) {
+          x();
+        }
       }
     }
-  }
+  }) as unknown as T;
 };
 
 export function createEmitter(): Emitter {
@@ -197,6 +200,8 @@ export function create<TData, TProps, TActions extends Actions<TData>>(
   let initialized = !lazyInit;
   let lastUpdateContext: UpdateContext | undefined;
   let concurrentController: ConcurrentController | void;
+  let autoRefreshTimer: any;
+  let disposed = false;
   let state: State = {
     data: undefined as any,
     loading: false,
@@ -228,6 +233,28 @@ export function create<TData, TProps, TActions extends Actions<TData>>(
     if (initialized) return;
     initialized = true;
     blok.set(initialData);
+    if (options?.autoRefresh) {
+      let refreshFn: (next: VoidFunction, blok: Blok<TData>) => void;
+
+      if (typeof options.autoRefresh === "number") {
+        const ms = options.autoRefresh;
+        refreshFn = (next) => {
+          clearTimeout(autoRefreshTimer);
+          autoRefreshTimer = setTimeout(next, ms);
+        };
+      } else {
+        refreshFn = options.autoRefresh;
+      }
+
+      function next() {
+        refreshFn(() => {
+          if (disposed) return;
+          blok.set(initialData);
+          next();
+        }, blok);
+      }
+      next();
+    }
   };
 
   blok = {
@@ -425,6 +452,12 @@ export function create<TData, TProps, TActions extends Actions<TData>>(
 
       return ref.prevData;
     },
+    dispose() {
+      if (disposed) return;
+      disposed = true;
+      if (autoRefreshTimer) clearTimeout(autoRefreshTimer);
+      changeEmitter.clear();
+    },
     ...options?.props,
   };
 
@@ -483,7 +516,7 @@ export function family<TBlok extends Blok<any>, TKey>(
       let [mapKey = key, member] = findMember(key);
       if (!member) {
         const original = factory(key);
-        const originalDispose = (original as any).dispose;
+        const originalDispose = original.dispose;
         member = Object.assign(original, {
           dispose() {
             originalDispose?.();
@@ -592,7 +625,13 @@ const hydratedData = new Map<any, HydratedData>();
  * @param collection
  * @returns
  */
-export function hydrate(collection?: DehydratedDataCollection) {
+export function hydrate(
+  collection?: DehydratedDataCollection,
+  freshHydrate?: boolean
+) {
+  if (freshHydrate) {
+    hydratedData.clear();
+  }
   if (collection) {
     for (const [blokKey, blokData] of collection) {
       // is family
@@ -610,8 +649,8 @@ export function hydrate(collection?: DehydratedDataCollection) {
       }
     }
   }
-  return function (blokKey: any, memberKey?: any): Hydration {
-    const hasMemberKey = arguments.length > 1;
+  return function (blokKey: any, options: HydrationOptions = {}): Hydration {
+    const hasMemberKey = "memberKey" in options;
 
     return (get) => {
       let hydrated = true;
@@ -623,17 +662,18 @@ export function hydrate(collection?: DehydratedDataCollection) {
           const family: HydratedData = {
             members: new Map<any, HydratedData>(),
           };
-          family.members?.set(memberKey, item);
+          family.members?.set(options.memberKey, item);
+          hydratedData.set(blokKey, family);
         } else {
           hydratedData.set(blokKey, item);
         }
       } else {
         if (hasMemberKey) {
-          let member = item.members?.get(memberKey);
+          let member = item.members?.get(options.memberKey);
           if (!member) {
             hydrated = false;
             member = {};
-            item.members?.set(memberKey, member);
+            item.members?.set(options.memberKey, member);
           }
           item = member;
         }

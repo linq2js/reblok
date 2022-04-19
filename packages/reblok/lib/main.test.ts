@@ -55,7 +55,7 @@ test("batch mutation", () => {
   let changes = 0;
   const counter = blok(0);
   counter.listen(() => changes++);
-  batch(() => {
+  const action = batch(() => {
     counter.data++;
     counter.data++;
     counter.data++;
@@ -63,6 +63,7 @@ test("batch mutation", () => {
     counter.data++;
     expect(changes).toBe(0);
   });
+  action();
   expect(changes).toBe(1);
 });
 
@@ -93,11 +94,43 @@ test("droppable", async () => {
 });
 
 test("hydrate", () => {
-  const hydration = hydrate();
+  const hydration = hydrate(undefined, true);
   const counter1 = blok(0, { hydrate: hydration("counter") });
   counter1.data++;
   const data = dehyrate();
   hydrate(data);
   const counter2 = blok(0, { hydrate: hydration("counter") });
   expect(counter2.data).toBe(1);
+});
+
+test("hydrate (family)", () => {
+  const hydration = hydrate(undefined, true);
+  const counters = blok([
+    (key: number) =>
+      blok(0, { hydrate: hydration("counter", { memberKey: key }) }),
+  ]);
+  counters.get(1).data += 1;
+  counters.get(2).data += 2;
+  const data = dehyrate();
+  hydrate(data);
+  const othercCounters = blok([
+    (key: number) =>
+      blok(0, { hydrate: hydration("counter", { memberKey: key }) }),
+  ]);
+  expect(othercCounters.get(1).data).toBe(1);
+  expect(othercCounters.get(2).data).toBe(2);
+});
+
+test("autoRefresh", async () => {
+  const values = [1, 2, 3, 4];
+  const counter = blok(() => values.shift(), { autoRefresh: 20 });
+  expect(counter.data).toBe(1);
+  await delay(25);
+  expect(counter.data).toBe(2);
+  await delay(25);
+  expect(counter.data).toBe(3);
+  counter.dispose();
+  // after dispose, the counter does not perform autoRefresh any more
+  await delay(25);
+  expect(counter.data).toBe(3);
 });

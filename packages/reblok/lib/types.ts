@@ -104,9 +104,7 @@ export interface Blok<TData = any> {
     updater: Updater<TData, TParams>,
     mode?: ConcurrentMode
   ): (...args: TParams) => void;
-}
 
-export interface DisposableBlok<TData> extends Blok<TData> {
   dispose(): void;
 }
 
@@ -125,6 +123,7 @@ export interface BlokOptions<TData, TProps, TActions> {
   props?: TProps;
   actions?: TActions;
   hydrate?: Hydration;
+  autoRefresh?: number | ((next: VoidFunction, blok: Blok<TData>) => void);
 }
 
 export interface LinkedBlokOptions<TData, TProps, TActions>
@@ -171,6 +170,10 @@ export interface Create extends Function {
     data: UpdateData<TData>,
     options?: BlokOptions<TData, TProps, TActions>
   ): Blok<TData> & TProps & ExtraActions<TActions>;
+}
+
+export interface HydrationOptions {
+  memberKey?: any;
 }
 
 export type Hydration = (get: () => any) => [boolean, any];
