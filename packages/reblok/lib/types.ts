@@ -191,8 +191,8 @@ export interface Hydration {
   of(key: any, options?: HydrationOptions): HydrateBlok;
   ofMember(key: any, member: any, options?: HydrationOptions): HydrateBlok;
   dehydrate(callback: (data: DehydratedDataCollection) => void): VoidFunction;
-  dataOf(key: any, data: any): this;
-  dataOfMember(key: any, member: any, data: any): this;
+  dataOf<TData>(key: any, data: TData): TData;
+  dataOfMember<TData>(key: any, member: any, data: TData): TData;
   /**
    * dehydrate creates a frozen representation of a cache that can later be hydrated with hydrate().
    * This is useful for passing prefetched blok data from server to client or persisting blok data to localStorage or other persistent locations.

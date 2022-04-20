@@ -784,11 +784,11 @@ export function hydrate(collection?: DehydratedDataCollection): Hydration {
     },
     dataOf(key, data) {
       setDataOf(key, undefined, false, data);
-      return this;
+      return data;
     },
     dataOfMember(key, member, data) {
       setDataOf(key, member, true, data);
-      return this;
+      return data;
     },
     dehydrate,
   };
