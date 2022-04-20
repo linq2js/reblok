@@ -1,4 +1,19 @@
-import { blok, batch, droppable, hydrate } from "./main";
+import {
+  blok,
+  batch,
+  droppable,
+  hydrate,
+  push,
+  pop,
+  shift,
+  unshift,
+  sort,
+  reverse,
+  filter,
+  map,
+  splice,
+  swap,
+} from "./main";
 
 const delay = <T = any>(ms = 0, value?: T) =>
   new Promise<T>((resolve) => setTimeout(resolve, ms, value));
@@ -160,4 +175,47 @@ test("lazy hydrate", () => {
   expect(counters.get(2).data).toBe(2);
   hydration.dataOfMember("counters", 3, 4);
   expect(counters.get(3).data).toBe(4);
+});
+
+test("merge", () => {
+  const profile = blok({ username: "", password: "" });
+  const data1 = profile.data;
+  profile.merge({ username: "admin" });
+  const data2 = profile.data;
+  expect(data1).not.toBe(data2);
+  expect(data2).toEqual({ username: "admin", password: "" });
+});
+
+test("array methods", () => {
+  const array = blok<number[]>([]);
+  const d1 = array.data;
+  array.set(push(1, 2, 3));
+  expect(array.data).toEqual([1, 2, 3]);
+  const d2 = array.data;
+  expect(d1).not.toBe(d2);
+  // push nothing
+  array.set(push());
+  const d3 = array.data;
+  // nothing changed
+  expect(d2).toBe(d3);
+  array.set(pop());
+  expect(array.data).toEqual([1, 2]);
+  array.set(shift());
+  expect(array.data).toEqual([2]);
+  array.set(unshift(1, 2, 3));
+  expect(array.data).toEqual([1, 2, 3, 2]);
+  array.set(sort());
+  expect(array.data).toEqual([1, 2, 2, 3]);
+  array.set(reverse());
+  expect(array.data).toEqual([3, 2, 2, 1]);
+  array.set(filter((x) => x % 2 !== 0));
+  expect(array.data).toEqual([3, 1]);
+  array.set(map((x) => x * 2));
+  expect(array.data).toEqual([6, 2]);
+  array.set(splice(0, 1, 1, 2, 3));
+  expect(array.data).toEqual([1, 2, 3, 2]);
+  array.set(swap(0, 3));
+  expect(array.data).toEqual([2, 2, 3, 1]);
+  array.set(swap(0, 4));
+  expect(array.data).toEqual([undefined, 2, 3, 1, 2]);
 });

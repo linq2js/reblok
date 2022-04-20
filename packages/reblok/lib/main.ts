@@ -190,6 +190,13 @@ function createUpdateContext(): UpdateContext {
   };
 }
 
+function mergeData(prev: Record<string, any>, next: Record<string, any>) {
+  const changed = Object.keys(next ?? {}).some(
+    (key) => prev[key] !== next[key]
+  );
+  return changed ? { ...prev, ...next } : prev;
+}
+
 export function create<TData, TProps, TActions extends Actions<TData>>(
   initialData: UpdateData<TData>,
   options?: BlokOptions<TData, TProps, TActions>
@@ -288,6 +295,16 @@ export function create<TData, TProps, TActions extends Actions<TData>>(
       initialized = false;
       init();
     },
+    merge: ((nextData: UpdateData<Partial<TData>>, mode?: ConcurrentMode) => {
+      return blok.set((prev, context) => {
+        const next: any =
+          typeof nextData === "function" ? nextData(prev, context) : nextData;
+        if (typeof next?.then === "function") {
+          return next.then((result: any) => mergeData(prev, result));
+        }
+        return mergeData(prev, next);
+      }, mode);
+    }) as any,
     set(nextData, mode) {
       lastUpdateContext?.cancel();
       concurrentController?.dispose?.();
@@ -774,5 +791,143 @@ export function hydrate(collection?: DehydratedDataCollection): Hydration {
       return this;
     },
     dehydrate,
+  };
+}
+
+export function push<TItem>(...items: TItem[]): Updater<TItem[]> {
+  return (prev) => {
+    if (!items.length) return prev;
+    return prev.concat(items);
+  };
+}
+
+export function pop<TItem>(): Updater<TItem[]> {
+  return (prev) => {
+    if (!prev.length) return prev;
+    return prev.slice(0, prev.length - 1);
+  };
+}
+
+export function shift<TItem>(): Updater<TItem[]> {
+  return (prev) => {
+    if (!prev.length) return prev;
+    return prev.slice(1);
+  };
+}
+
+export function unshift<TItem>(...items: TItem[]): Updater<TItem[]> {
+  return (prev) => {
+    if (!items.length) return prev;
+    return items.concat(prev);
+  };
+}
+
+export function filter<TItem>(
+  predicate: (item: TItem, index: number) => boolean
+): Updater<TItem[]> {
+  return (prev) => {
+    if (!prev.length) return prev;
+    const next = prev.filter(predicate);
+    if (next.length === prev.length) return prev;
+    return next;
+  };
+}
+
+export function sort<TItem>(
+  compare?: (a: TItem, b: TItem) => number
+): Updater<TItem[]> {
+  return (prev) => {
+    if (!prev.length) return prev;
+    return prev.slice().sort(compare);
+  };
+}
+
+export function reverse<TItem>(): Updater<TItem[]> {
+  return (prev) => {
+    if (!prev.length) return prev;
+    return prev.slice().reverse();
+  };
+}
+
+export function slice<TItem>(start?: number, end?: number): Updater<TItem[]> {
+  return (prev) => {
+    if (!prev.length) return prev;
+    return prev.slice(start, end);
+  };
+}
+
+export function map<TItem>(
+  mapper: (item: TItem, index: number) => TItem
+): Updater<TItem[]> {
+  return (prev) => {
+    if (!prev.length) return prev;
+    let changed = false;
+    const result = prev.map((item, index) => {
+      const next = mapper(item, index);
+      if (next !== item) {
+        changed = true;
+      }
+      return next;
+    });
+    return changed ? result : prev;
+  };
+}
+
+export function swap<TItem>(from: number, to: number): Updater<TItem[]> {
+  return (prev) => {
+    if (!prev.length || from === to) return prev;
+    if (prev[from] === prev[to]) return prev;
+    const next = prev.slice();
+    [next[from], next[to]] = [prev[to], prev[from]];
+    return next;
+  };
+}
+
+export function by<TItem, TResult>(
+  selector: (item: TItem) => TResult,
+  desc = false
+) {
+  return (a: TItem, b: TItem) => {
+    const av = selector(a);
+    const bv = selector(b);
+    if (av === bv) return 0;
+    if (av > bv) return desc ? -1 : 1;
+    return desc ? 1 : -1;
+  };
+}
+
+export function order<TItem>(
+  ...by: ((a: TItem, b: TItem) => number)[]
+): Updater<TItem[]> {
+  return sort((a, b) => {
+    let result = 0;
+    for (const s of by) {
+      result = s(a, b);
+      if (result !== 0) return result;
+    }
+    return result;
+  });
+}
+
+export const include = filter;
+
+export function exclude<TItem>(
+  predicate: (item: TItem, index: number) => boolean
+): Updater<TItem[]> {
+  return filter((item, index) => !predicate(item, index));
+}
+
+export function splice<TItem>(
+  index: number,
+  remove: number,
+  ...items: TItem[]
+): Updater<TItem[]> {
+  return (prev) => {
+    if (!prev.length && !items.length) return prev;
+    const next = prev.slice();
+    next.splice(index, remove, ...items);
+    // nothing to be removed
+    if (!items.length && next.length === prev.length) return prev;
+    return next;
   };
 }

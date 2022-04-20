@@ -64,6 +64,10 @@ export interface Blok<TData = any> {
    */
   set(data: UpdateData<TData>, mode?: ConcurrentMode): void;
 
+  readonly merge: TData extends { [key: string]: any }
+    ? (data: UpdateData<Partial<TData>>, mode?: ConcurrentMode) => void
+    : never;
+
   debounce(ms: number, data: UpdateData<TData>): void;
 
   throttle(ms: number, data: UpdateData<TData>): void;
