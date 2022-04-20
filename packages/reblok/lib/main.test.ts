@@ -98,9 +98,18 @@ test("hydrate", () => {
   const counter1 = blok(0, { hydrate: hydration("counter") });
   counter1.data++;
   const data = dehyrate();
+  const data2 = dehyrate();
+  // should be the same if nothing change since last time
+  expect(data).toBe(data2);
   hydrate(data);
   const counter2 = blok(0, { hydrate: hydration("counter") });
   expect(counter2.data).toBe(1);
+  counter2.data++;
+  counter2.data--;
+  const data3 = dehyrate();
+  // after the blok changed, the reference of dehyrated data is changed as well but it must be equal to prev one
+  expect(data).not.toBe(data3);
+  expect(data).toEqual(data3);
 });
 
 test("hydrate (family)", () => {
@@ -112,6 +121,7 @@ test("hydrate (family)", () => {
   counters.get(1).data += 1;
   counters.get(2).data += 2;
   const data = dehyrate();
+
   hydrate(data);
   const othercCounters = blok([
     (key: number) =>

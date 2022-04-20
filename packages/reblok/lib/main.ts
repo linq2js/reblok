@@ -225,6 +225,11 @@ export function create<TData, TProps, TActions extends Actions<TData>>(
     ) {
       return;
     }
+
+    if (state.data !== nextState.data && options?.hydrate) {
+      clearDehyratedData();
+    }
+
     state = nextState;
     notify();
   };
@@ -614,10 +619,17 @@ export const blok: Create = (...args: any[]): any => {
 
 type HydratedData = {
   data?: any;
+  prevData?: any;
   members?: Map<any, HydratedData>;
   get?: () => any;
 };
 const hydratedData = new Map<any, HydratedData>();
+
+let lastDehyratedData: DehydratedDataCollection | undefined;
+
+function clearDehyratedData() {
+  lastDehyratedData = undefined;
+}
 
 /**
  * hydrate adds a previously dehydrated state into a cache.
@@ -691,6 +703,7 @@ export function hydrate(
  * @returns
  */
 export function dehyrate() {
+  if (lastDehyratedData) return lastDehyratedData;
   const collection: DehydratedDataCollection = [];
   for (const [blokKey, blokData] of hydratedData) {
     if (blokData.members) {
@@ -706,5 +719,6 @@ export function dehyrate() {
     if (!blokData.get) continue;
     collection.push([blokKey, { data: blokData.get() }]);
   }
+  lastDehyratedData = collection;
   return collection;
 }
