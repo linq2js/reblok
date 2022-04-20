@@ -113,7 +113,7 @@ test("hydrate", () => {
 });
 
 test("hydrate (family)", () => {
-  let hydration = hydrate(undefined);
+  let hydration = hydrate();
   const counters = blok([
     (key: number) => blok(0, { hydrate: hydration.ofMember("counter", key) }),
   ]);
@@ -142,4 +142,22 @@ test("autoRefresh", async () => {
   // after dispose, the counter does not perform autoRefresh any more
   await delay(25);
   expect(counter.data).toBe(3);
+});
+
+test("lazy hydrate", () => {
+  const hydration = hydrate();
+  const counter1 = blok(0, { hydrate: hydration.of("counter") });
+  expect(counter1.data).toBe(0);
+  hydration.dataOf("counter", 1);
+  expect(counter1.data).toBe(0);
+  const counter2 = blok(0, { hydrate: hydration.of("counter") });
+  expect(counter2.data).toBe(1);
+  const counters = blok([
+    (key: number) =>
+      blok(key, { hydrate: hydration.ofMember("counters", key) }),
+  ]);
+  expect(counters.get(1).data).toBe(1);
+  expect(counters.get(2).data).toBe(2);
+  hydration.dataOfMember("counters", 3, 4);
+  expect(counters.get(3).data).toBe(4);
 });

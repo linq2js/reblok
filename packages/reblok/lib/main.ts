@@ -143,7 +143,6 @@ export const debounce =
 
 export const droppable = (): ConcurrentMode => (context, callback) => {
   if (context.updatingToken) {
-    console.log("skip");
     return;
   }
   const token = (context.updatingToken = {});
@@ -379,6 +378,13 @@ export function create<TData, TProps, TActions extends Actions<TData>>(
       const errorPromise = Promise.reject(state.error);
       errorPromise.catch(() => {});
       return errorPromise;
+    },
+    local: function Local() {
+      const blokRef = useRef<any>();
+      if (blokRef.current) {
+        blokRef.current = create(initialData, options);
+      }
+      return blokRef.current;
     },
     use: function Use(...args: any[]) {
       type ComponentContext = {
@@ -729,12 +735,43 @@ export function hydrate(collection?: DehydratedDataCollection): Hydration {
     };
   }
 
+  function setDataOf(
+    blokKey: any,
+    memberKey: any,
+    hasMemberKey: boolean,
+    data: any
+  ) {
+    let item = hydratedData.get(blokKey);
+    if (!item) {
+      item = {};
+      hydratedData.set(blokKey, item);
+    }
+    if (hasMemberKey) {
+      if (!item.members) item.members = new Map();
+      let member = item.members.get(memberKey);
+      if (!member) {
+        member = {};
+        item.members.set(memberKey, member);
+      }
+      item = member;
+    }
+    item.data = data;
+  }
+
   return {
     of(key, options) {
       return getHydrateOf(key, undefined, false, options);
     },
     ofMember(key, memberKey, options) {
       return getHydrateOf(key, memberKey, true, options);
+    },
+    dataOf(key, data) {
+      setDataOf(key, undefined, false, data);
+      return this;
+    },
+    dataOfMember(key, member, data) {
+      setDataOf(key, member, true, data);
+      return this;
     },
     dehydrate,
   };

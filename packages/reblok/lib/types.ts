@@ -78,6 +78,11 @@ export interface Blok<TData = any> {
    */
   use(): TData;
   /**
+   * create a local instance of the blok
+   * Note: this is React hook so you must follow hook rules to use this: https://reactjs.org/docs/hooks-rules.html
+   */
+  local(): this;
+  /**
    * bind the blok to the React component and return selected slice of the blok data.
    * Note: this is React hook so you must follow hook rules to use this: https://reactjs.org/docs/hooks-rules.html
    * @param selector
@@ -182,6 +187,8 @@ export interface Hydration {
   of(key: any, options?: HydrationOptions): HydrateBlok;
   ofMember(key: any, member: any, options?: HydrationOptions): HydrateBlok;
   dehydrate(callback: (data: DehydratedDataCollection) => void): VoidFunction;
+  dataOf(key: any, data: any): this;
+  dataOfMember(key: any, member: any, data: any): this;
   /**
    * dehydrate creates a frozen representation of a cache that can later be hydrated with hydrate().
    * This is useful for passing prefetched blok data from server to client or persisting blok data to localStorage or other persistent locations.
