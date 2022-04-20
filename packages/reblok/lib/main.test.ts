@@ -1,4 +1,4 @@
-import { blok, batch, droppable, hydrate, dehyrate } from "./main";
+import { blok, batch, droppable, hydrate } from "./main";
 
 const delay = <T = any>(ms = 0, value?: T) =>
   new Promise<T>((resolve) => setTimeout(resolve, ms, value));
@@ -94,38 +94,37 @@ test("droppable", async () => {
 });
 
 test("hydrate", () => {
-  const hydration = hydrate(undefined, true);
-  const counter1 = blok(0, { hydrate: hydration("counter") });
+  let hydration = hydrate(undefined);
+  const counter1 = blok(0, { hydrate: hydration.of("counter") });
   counter1.data++;
-  const data = dehyrate();
-  const data2 = dehyrate();
+  const data = hydration.dehydrate();
+  const data2 = hydration.dehydrate();
   // should be the same if nothing change since last time
   expect(data).toBe(data2);
-  hydrate(data);
-  const counter2 = blok(0, { hydrate: hydration("counter") });
+  hydration = hydrate(data);
+  const counter2 = blok(0, { hydrate: hydration.of("counter") });
   expect(counter2.data).toBe(1);
   counter2.data++;
   counter2.data--;
-  const data3 = dehyrate();
+  const data3 = hydration.dehydrate();
   // after the blok changed, the reference of dehyrated data is changed as well but it must be equal to prev one
   expect(data).not.toBe(data3);
   expect(data).toEqual(data3);
 });
 
 test("hydrate (family)", () => {
-  const hydration = hydrate(undefined, true);
+  let hydration = hydrate(undefined);
   const counters = blok([
-    (key: number) =>
-      blok(0, { hydrate: hydration("counter", { memberKey: key }) }),
+    (key: number) => blok(0, { hydrate: hydration.ofMember("counter", key) }),
   ]);
   counters.get(1).data += 1;
   counters.get(2).data += 2;
-  const data = dehyrate();
+  const data = hydration.dehydrate();
 
-  hydrate(data);
+  hydration = hydrate(data);
+
   const othercCounters = blok([
-    (key: number) =>
-      blok(0, { hydrate: hydration("counter", { memberKey: key }) }),
+    (key: number) => blok(0, { hydrate: hydration.ofMember("counter", key) }),
   ]);
   expect(othercCounters.get(1).data).toBe(1);
   expect(othercCounters.get(2).data).toBe(2);

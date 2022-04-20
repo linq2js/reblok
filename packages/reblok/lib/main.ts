@@ -11,6 +11,7 @@ import {
   ExtraActions,
   Family,
   FamilyOptions,
+  HydrateBlok,
   Hydration,
   HydrationOptions,
   LinkedBlokOptions,
@@ -52,6 +53,13 @@ export const batch = <T extends Function>(mutation: T): T => {
 export function createEmitter(): Emitter {
   const handlers: Function[] = [];
   let indexesChanged = {};
+
+  function emit(payload: any) {
+    for (const handler of handlers.slice(0)) {
+      handler(payload);
+    }
+  }
+
   return {
     each(callback) {
       for (const handler of handlers) {
@@ -75,10 +83,9 @@ export function createEmitter(): Emitter {
         }
       };
     },
-    emit(payload) {
-      for (const handler of handlers.slice(0)) {
-        handler(payload);
-      }
+    emit,
+    emitIfAny(factory) {
+      if (handlers.length) return emit(factory());
     },
     clear() {
       handlers.length = 0;
@@ -224,10 +231,6 @@ export function create<TData, TProps, TActions extends Actions<TData>>(
       state.loading === nextState.loading
     ) {
       return;
-    }
-
-    if (state.data !== nextState.data && options?.hydrate) {
-      clearDehyratedData();
     }
 
     state = nextState;
@@ -474,7 +477,7 @@ export function create<TData, TProps, TActions extends Actions<TData>>(
   }
 
   if (options?.hydrate) {
-    const [hydrated, value] = options.hydrate(blok.get);
+    const [hydrated, value] = options.hydrate(blok);
     if (hydrated) {
       state.data = value;
       initialized = true;
@@ -621,15 +624,8 @@ type HydratedData = {
   data?: any;
   prevData?: any;
   members?: Map<any, HydratedData>;
-  get?: () => any;
+  blok?: Blok;
 };
-const hydratedData = new Map<any, HydratedData>();
-
-let lastDehyratedData: DehydratedDataCollection | undefined;
-
-function clearDehyratedData() {
-  lastDehyratedData = undefined;
-}
 
 /**
  * hydrate adds a previously dehydrated state into a cache.
@@ -637,13 +633,11 @@ function clearDehyratedData() {
  * @param collection
  * @returns
  */
-export function hydrate(
-  collection?: DehydratedDataCollection,
-  freshHydrate?: boolean
-) {
-  if (freshHydrate) {
-    hydratedData.clear();
-  }
+export function hydrate(collection?: DehydratedDataCollection): Hydration {
+  const hydratedData = new Map<any, HydratedData>();
+  const dehydrateEmitter = createEmitter();
+  let lastDehyratedData: DehydratedDataCollection | undefined;
+
   if (collection) {
     for (const [blokKey, blokData] of collection) {
       // is family
@@ -661,10 +655,49 @@ export function hydrate(
       }
     }
   }
-  return function (blokKey: any, options: HydrationOptions = {}): Hydration {
-    const hasMemberKey = "memberKey" in options;
 
-    return (get) => {
+  function dehydrate(input?: unknown): any {
+    if (typeof input === "function") {
+      return dehydrateEmitter.add(input);
+    }
+    if (lastDehyratedData) return lastDehyratedData;
+    const collection: DehydratedDataCollection = [];
+    for (const [blokKey, blokData] of hydratedData) {
+      if (blokData.members) {
+        const members: [any, any][] = [];
+        for (const [memberKey, memberData] of blokData.members) {
+          if (!memberData.blok) continue;
+          members.push([memberKey, memberData.blok.data]);
+        }
+        collection.push([blokKey, { members }]);
+        continue;
+      }
+
+      if (!blokData.blok) continue;
+      collection.push([blokKey, { data: blokData.blok.data }]);
+    }
+    lastDehyratedData = collection;
+    return collection;
+  }
+
+  function getHydrateOf(
+    blokKey: any,
+    memberKey: any,
+    hasMemberKey: boolean,
+    options: HydrationOptions = {}
+  ): HydrateBlok {
+    options;
+    return (blok) => {
+      let prevData = {};
+      // handle blok change
+      blok.listen(() => {
+        if (blok.error || blok.loading) return;
+        if (prevData === blok.data) return;
+        prevData = blok.data;
+        lastDehyratedData = undefined;
+        dehydrateEmitter.emitIfAny(() => dehydrate());
+      });
+
       let hydrated = true;
       let item = hydratedData.get(blokKey);
       if (!item) {
@@ -674,51 +707,34 @@ export function hydrate(
           const family: HydratedData = {
             members: new Map<any, HydratedData>(),
           };
-          family.members?.set(options.memberKey, item);
+          family.members?.set(memberKey, item);
           hydratedData.set(blokKey, family);
         } else {
           hydratedData.set(blokKey, item);
         }
       } else {
         if (hasMemberKey) {
-          let member = item.members?.get(options.memberKey);
+          let member = item.members?.get(memberKey);
           if (!member) {
             hydrated = false;
             member = {};
-            item.members?.set(options.memberKey, member);
+            item.members?.set(memberKey, member);
           }
           item = member;
         }
       }
-      item.get = get;
+      item!.blok = blok;
       return [hydrated, item.data];
     };
-  };
-}
-
-/**
- * dehydrate creates a frozen representation of a cache that can later be hydrated with hydrate().
- * This is useful for passing prefetched blok data from server to client or persisting blok data to localStorage or other persistent locations.
- * It only includes currently using blok by default.
- * @returns
- */
-export function dehyrate() {
-  if (lastDehyratedData) return lastDehyratedData;
-  const collection: DehydratedDataCollection = [];
-  for (const [blokKey, blokData] of hydratedData) {
-    if (blokData.members) {
-      const members: [any, any][] = [];
-      for (const [memberKey, memberData] of blokData.members) {
-        if (!memberData.get) continue;
-        members.push([memberKey, memberData.get()]);
-      }
-      collection.push([blokKey, { members }]);
-      continue;
-    }
-
-    if (!blokData.get) continue;
-    collection.push([blokKey, { data: blokData.get() }]);
   }
-  lastDehyratedData = collection;
-  return collection;
+
+  return {
+    of(key, options) {
+      return getHydrateOf(key, undefined, false, options);
+    },
+    ofMember(key, memberKey, options) {
+      return getHydrateOf(key, memberKey, true, options);
+    },
+    dehydrate,
+  };
 }

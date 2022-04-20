@@ -7,6 +7,8 @@ export interface Emitter {
   each(callback: (handler: Function) => void): void;
   // clear all handlers
   clear(): void;
+
+  emitIfAny(eventFactory: () => any): void;
 }
 
 export type Comparer<T> = (a: T, b: T) => boolean;
@@ -115,14 +117,14 @@ export interface Family<TBlok extends Blok<any>, TKey> {
 
 export interface FamilyOptions<TKey> {
   compare?: Comparer<TKey>;
-  hydrate?: Hydration;
+  hydrate?: HydrateBlok;
 }
 
 export interface BlokOptions<TData, TProps, TActions> {
   compare?: Comparer<TData>;
   props?: TProps;
   actions?: TActions;
-  hydrate?: Hydration;
+  hydrate?: HydrateBlok;
   autoRefresh?: number | ((next: VoidFunction, blok: Blok<TData>) => void);
 }
 
@@ -172,11 +174,22 @@ export interface Create extends Function {
   ): Blok<TData> & TProps & ExtraActions<TActions>;
 }
 
-export interface HydrationOptions {
-  memberKey?: any;
-}
+export interface HydrationOptions {}
 
-export type Hydration = (get: () => any) => [boolean, any];
+export type HydrateBlok = (blok: Blok) => [boolean, any];
+
+export interface Hydration {
+  of(key: any, options?: HydrationOptions): HydrateBlok;
+  ofMember(key: any, member: any, options?: HydrationOptions): HydrateBlok;
+  dehydrate(callback: (data: DehydratedDataCollection) => void): VoidFunction;
+  /**
+   * dehydrate creates a frozen representation of a cache that can later be hydrated with hydrate().
+   * This is useful for passing prefetched blok data from server to client or persisting blok data to localStorage or other persistent locations.
+   * It only includes currently using blok by default.
+   * @returns
+   */
+  dehydrate(): DehydratedDataCollection;
+}
 
 export type DehydratedData = { data?: any; members?: [any, any][] };
 
