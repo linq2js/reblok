@@ -179,7 +179,7 @@ export interface Create extends Function {
 
   <TData, TProps, TActions extends Actions<TData>>(
     data: UpdateData<TData>,
-    options: BlokOptions<TData, TProps, TActions>
+    options?: BlokOptions<TData, TProps, TActions>
   ): Blok<TData> & TProps & ExtraActions<TActions>;
 }
 

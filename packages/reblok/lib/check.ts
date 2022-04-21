@@ -53,4 +53,14 @@ export function typeCheck() {
     { props: { name: "" } }
   );
   s3.data;
+
+  type ThemeType = "dark";
+  const def: ThemeType = "dark";
+  const bb = blok(def, {
+    props: { name: "" },
+    actions: {
+      increment: (_) => "dark",
+    },
+  });
+  bb.name;
 }
