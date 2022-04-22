@@ -396,10 +396,13 @@ export function create<TData, TProps, TActions extends Actions<TData>>(
       errorPromise.catch(() => {});
       return errorPromise;
     },
-    local: function Local() {
+    local: function Local(customData?) {
       const blokRef = useRef<any>();
-      if (blokRef.current) {
-        blokRef.current = create(initialData, options);
+      if (!blokRef.current) {
+        blokRef.current = create(
+          arguments.length ? (customData as any) : initialData,
+          options
+        );
       }
       return blokRef.current;
     },

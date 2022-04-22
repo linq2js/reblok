@@ -87,6 +87,11 @@ export interface Blok<TData = any> {
    */
   local(): this;
   /**
+   * create a local instance of the blok
+   * @param data
+   */
+  local(data: UpdateData<TData>): this;
+  /**
    * bind the blok to the React component and return selected slice of the blok data.
    * Note: this is React hook so you must follow hook rules to use this: https://reactjs.org/docs/hooks-rules.html
    * @param selector
