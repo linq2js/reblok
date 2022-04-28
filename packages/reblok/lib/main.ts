@@ -404,6 +404,8 @@ export function create<TData, TProps, TActions extends Actions<TData>>(
           options
         );
       }
+      // always re-render
+      blokRef.current.use(() => ({}));
       return blokRef.current;
     },
     use: function Use(...args: any[]) {
