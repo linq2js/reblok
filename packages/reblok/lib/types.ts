@@ -164,6 +164,8 @@ export type Selector<TSource, TData> = (
 ) => Data<TData>;
 
 export interface Create extends Function {
+  (): Blok<any>;
+
   <TBlok extends Blok<any>, TKey>(
     factory: [(key: TKey) => TBlok],
     options?: FamilyOptions<TKey>
