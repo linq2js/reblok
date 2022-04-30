@@ -62,10 +62,24 @@ export interface Blok<TData = any> {
    * @param data
    * @param mode
    */
-  set(data: UpdateData<TData>, mode?: ConcurrentMode): void;
+  set(data: UpdateData<TData>, mode?: ConcurrentMode): this;
+
+  set<TPath extends FieldPath<TData>>(
+    path: TPath,
+    data: UpdateData<FieldPathValue<TData, TPath>>,
+    mode?: ConcurrentMode
+  ): this;
+
+  mset<
+    TKey extends FieldPath<TData>,
+    TValues extends { [key in TKey]?: UpdateData<FieldPathValue<TData, key>> }
+  >(
+    values: TValues,
+    mode?: ConcurrentMode
+  ): this;
 
   readonly merge: TData extends { [key: string]: any }
-    ? (data: UpdateData<Partial<TData>>, mode?: ConcurrentMode) => void
+    ? (data: UpdateData<Partial<TData>>, mode?: ConcurrentMode) => this
     : never;
 
   debounce(ms: number, data: UpdateData<TData>): void;
@@ -76,6 +90,9 @@ export interface Blok<TData = any> {
    * get current data of the blok
    */
   get(): TData;
+  get<TPath extends FieldPath<TData>>(
+    path: TPath
+  ): FieldPathValue<TData, TPath>;
   /**
    * bind the blok to the React component and return the blok data
    * Note: this is React hook so you must follow hook rules to use this: https://reactjs.org/docs/hooks-rules.html
@@ -212,3 +229,69 @@ export interface Hydration {
 export type DehydratedData = { data?: any; members?: [any, any][] };
 
 export type DehydratedDataCollection = [any, DehydratedData][];
+
+// BEGIN react-hook-form types
+/* eslint-disable @typescript-eslint/no-explicit-any */
+export type ArrayKey = number;
+
+export type Primitive =
+  | null
+  | undefined
+  | string
+  | number
+  | boolean
+  | symbol
+  | bigint;
+
+export type PathImpl<K extends string | number, V> = V extends Primitive
+  ? `${K}`
+  : `${K}` | `${K}.${Path<V>}`;
+
+export type IsTuple<T extends ReadonlyArray<any>> = number extends T["length"]
+  ? false
+  : true;
+
+export type TupleKeys<T extends ReadonlyArray<any>> = Exclude<
+  keyof T,
+  keyof any[]
+>;
+
+export type FieldValues = Record<string, any>;
+
+export type FieldPath<TFieldValues extends FieldValues> = Path<TFieldValues>;
+
+export type Path<T> = T extends ReadonlyArray<infer V>
+  ? IsTuple<T> extends true
+    ? {
+        [K in TupleKeys<T>]-?: PathImpl<K & string, T[K]>;
+      }[TupleKeys<T>]
+    : PathImpl<ArrayKey, V>
+  : {
+      [K in keyof T]-?: PathImpl<K & string, T[K]>;
+    }[keyof T];
+
+export type FieldPathValue<
+  TFieldValues extends FieldValues,
+  TFieldPath extends FieldPath<TFieldValues>
+> = PathValue<TFieldValues, TFieldPath>;
+
+export type PathValue<T, P extends Path<T>> = T extends any
+  ? P extends `${infer K}.${infer R}`
+    ? K extends keyof T
+      ? R extends Path<T[K]>
+        ? PathValue<T[K], R>
+        : never
+      : K extends `${ArrayKey}`
+      ? T extends ReadonlyArray<infer V>
+        ? PathValue<V, R & Path<V>>
+        : never
+      : never
+    : P extends keyof T
+    ? T[P]
+    : P extends `${ArrayKey}`
+    ? T extends ReadonlyArray<infer V>
+      ? V
+      : never
+    : never
+  : never;
+// END react-hook-form types

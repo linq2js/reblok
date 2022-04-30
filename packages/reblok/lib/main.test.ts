@@ -219,3 +219,30 @@ test("array methods", () => {
   array.set(swap(0, 4));
   expect(array.data).toEqual([undefined, 2, 3, 1, 2]);
 });
+
+test("get by path", () => {
+  const b = blok({ nested: { nested: { value: 1 } } });
+  expect(b.get("nested.nested.value")).toBe(1);
+});
+
+test("set by path", () => {
+  const data = { nested: { nested: { value: 1 } }, other: [1, 2, 3] };
+  const b = blok(data);
+  b.set("nested.nested.value", 2);
+  expect(b.data.nested.nested.value).toBe(2);
+  expect(b.data).not.toBe(data);
+  expect(b.data).toEqual({
+    nested: { nested: { value: 2 } },
+    other: [1, 2, 3],
+  });
+  b.set("nested.nested.value", (prev) => prev + 1);
+  expect(b.data.nested.nested.value).toBe(3);
+  b.mset({
+    "nested.nested.value": 4,
+    "other.0": 2,
+  });
+  expect(b.data).toEqual({
+    nested: { nested: { value: 4 } },
+    other: [2, 2, 3],
+  });
+});

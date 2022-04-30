@@ -63,4 +63,24 @@ export function typeCheck() {
     },
   });
   bb.name;
+
+  const obj = blok({
+    nested: {
+      nested: {
+        nested: {
+          value: 1,
+        },
+      },
+      array: [1, 2, 3],
+    },
+    other: 1,
+  });
+  const arr = obj.get("nested.array");
+  console.log(arr.fill(0));
+  const value = obj.get("nested.nested.nested.value");
+  console.log(value);
+  obj.mset({
+    other: 2,
+    "nested.nested.nested.value": (prev) => prev + 1,
+  });
 }

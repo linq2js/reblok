@@ -197,6 +197,16 @@ function mergeData(prev: Record<string, any>, next: Record<string, any>) {
   return changed ? { ...prev, ...next } : prev;
 }
 
+function immutableAssign(obj: any, key: string, value: any) {
+  if (!obj) {
+    obj = {};
+  } else {
+    obj = Array.isArray(obj) ? [...obj] : { ...obj };
+  }
+  obj[key] = value;
+  return obj;
+}
+
 export function create<TData, TProps, TActions extends Actions<TData>>(
   initialData: UpdateData<TData>,
   options?: BlokOptions<TData, TProps, TActions>
@@ -271,6 +281,10 @@ export function create<TData, TProps, TActions extends Actions<TData>>(
     }
   };
 
+  const getByPath = (path: string[]) => {
+    return path.reduce((obj, prop) => obj?.[prop], blok.data as any);
+  };
+
   blok = {
     get loading() {
       return state.loading;
@@ -305,7 +319,59 @@ export function create<TData, TProps, TActions extends Actions<TData>>(
         return mergeData(prev, next);
       }, mode);
     }) as any,
-    set(nextData, mode) {
+    mset(values, mode) {
+      batch(() => {
+        Object.entries(values).forEach(([key, value]) =>
+          blok.set(key as any, value as any, mode)
+        );
+      })();
+      return this;
+    },
+    set(...args: any[]) {
+      let nextData: UpdateData<TData>;
+      let mode: ConcurrentMode | undefined;
+
+      if (typeof args[0] === "string") {
+        let path: string;
+        let originalUpdateData: UpdateData<TData>;
+        [path, originalUpdateData, mode] = args;
+        const parts = path.split(".");
+        nextData = (prev: any, context) => {
+          const updateNested = (prevNestedData: any, nextNestedData: any) => {
+            if (prevNestedData === nextNestedData) return prev;
+            const stack: any[] = [prev];
+            let parent: any = prev;
+            for (let i = 0; i < parts.length - 1; i++) {
+              stack.push((parent = parent?.[parts[i]]));
+            }
+            parent = nextNestedData;
+            for (let i = parts.length - 1; i >= 0; i--) {
+              parent = immutableAssign(stack.pop(), parts[i], parent);
+            }
+            return parent;
+          };
+
+          if (typeof originalUpdateData === "function") {
+            const prevNestedData = getByPath(parts);
+            const nextNestedData: any = (originalUpdateData as Updater<TData>)(
+              prevNestedData,
+              context
+            );
+
+            if (typeof nextNestedData?.then === "function") {
+              return nextNestedData.then((value: any) =>
+                updateNested(prevNestedData, value)
+              );
+            }
+            return updateNested(prevNestedData, nextNestedData);
+          }
+
+          return updateNested(getByPath(parts), originalUpdateData);
+        };
+      } else {
+        [nextData, mode] = args;
+      }
+
       lastUpdateContext?.cancel();
       concurrentController?.dispose?.();
       let cc: ConcurrentController | void | undefined;
@@ -314,7 +380,7 @@ export function create<TData, TProps, TActions extends Actions<TData>>(
         cc = concurrentController = mode(concurrentContext, () =>
           blok.set(nextData)
         );
-        return;
+        return this;
       }
 
       try {
@@ -324,7 +390,7 @@ export function create<TData, TProps, TActions extends Actions<TData>>(
         }
       } catch (e) {
         changeState({ loading: false, error: e });
-        return;
+        return this;
       }
 
       // async update
@@ -356,7 +422,7 @@ export function create<TData, TProps, TActions extends Actions<TData>>(
             });
           }
         );
-        return;
+        return this;
       }
 
       if (typeof cc === "object") {
@@ -370,8 +436,12 @@ export function create<TData, TProps, TActions extends Actions<TData>>(
         error: undefined,
         loading: false,
       });
+      return this;
     },
-    get() {
+    get(path?: string): any {
+      if (path) {
+        return getByPath(path?.split("."));
+      }
       return blok.data;
     },
     action(f: Function, mode): any {
