@@ -331,7 +331,8 @@ export function create<TData, TProps, TActions extends Actions<TData>>(
       let nextData: UpdateData<TData>;
       let mode: ConcurrentMode | undefined;
 
-      if (typeof args[0] === "string") {
+      // set(path, value, mode)
+      if (typeof args[0] === "string" && args.length >= 2) {
         let path: string;
         let originalUpdateData: UpdateData<TData>;
         [path, originalUpdateData, mode] = args;
