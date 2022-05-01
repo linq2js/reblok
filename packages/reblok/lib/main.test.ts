@@ -245,4 +245,9 @@ test("set by path", () => {
     nested: { nested: { value: 4 } },
     other: [2, 2, 3],
   });
+  const other = b.data.other;
+  // using clone() method of update context
+  b.set("other", (_, { clone }) => clone().splice(1, 2));
+  expect(b.data.other).not.toBe(other);
+  expect(b.data.other).toEqual([2]);
 });

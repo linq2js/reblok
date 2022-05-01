@@ -15,7 +15,7 @@ export type Comparer<T> = (a: T, b: T) => boolean;
 
 export type Updater<TData, TParams extends any[] = []> = (
   prev: TData,
-  context: UpdateContext,
+  context: UpdateContext<TData>,
   ...args: TParams
 ) => Data<TData>;
 
@@ -35,9 +35,16 @@ export type ConcurrentMode = (
   callback: VoidFunction
 ) => ConcurrentController | void;
 
-export interface UpdateContext {
+export interface UpdateContext<T> {
   signal?: any;
+  /**
+   * cancel AbortSignal if possible
+   */
   cancel(): void;
+  /**
+   * return clone of pervious data. clone() method returns Array if the previous data is Array unless it returns Object
+   */
+  clone(): T;
 }
 
 export type UpdateData<T> = Promise<T> | T | Updater<T>;
@@ -177,7 +184,7 @@ export type DataGroup<TSource> = {
 export type Selector<TSource, TData> = (
   data: TSource extends Blok<infer T> ? T : DataGroup<TSource>,
   prev: TData,
-  context: UpdateContext
+  context: UpdateContext<TData>
 ) => Data<TData>;
 
 export interface Create extends Function {

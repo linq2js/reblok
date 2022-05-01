@@ -206,3 +206,45 @@ updateCounter(); // this updating is skipped
 // wait in 600ms
 updateCounter(); // counter = 2
 ```
+
+### Updaing nested data
+
+```js
+const userProfile = blok({
+  name: "dan",
+  fullName: "Dan Abramov",
+  address: { street: "123", city: "New York" },
+  tags: ["React Developer", "Web Developer", "Senior Developer"],
+});
+
+// chaining method calls, but the update notification will run twice
+userProfile
+  .set("name", "dan (updated)")
+  .set("fullname", "Dan Abramov (updated)");
+
+// update notfication runs once
+batch(() => {
+  userProfile
+    .set("name", "dan (updated)")
+    .set("fullname", "Dan Abramov (updated)");
+})();
+
+const addPostfix = (prev) => prev + " (updated)";
+
+// using updaters
+userProfile.set("name", addPostfix).set("fullname", addPostfix);
+
+// update multiple paths at once
+userProfile.mset({
+  name: addPostfix,
+  fullName: addPostfix,
+  address: (prev, { clone }) => {
+    // clone current address object and change city prop
+    clone()["city"] = "Washington";
+  },
+  tags: (prev, { clone }) => {
+    // clone current tag array and push new tag
+    clone().push("new tag");
+  },
+});
+```

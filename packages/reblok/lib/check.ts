@@ -72,6 +72,7 @@ export function typeCheck() {
         },
       },
       array: [1, 2, 3],
+      todos: [{ title: "todo 1" }, { title: "totd2" }],
     },
     other: 1,
   });
@@ -83,4 +84,6 @@ export function typeCheck() {
     other: 2,
     "nested.nested.nested.value": (prev) => prev + 1,
   });
+  const todoIndex: number = 0;
+  obj.set(`nested.todos.${todoIndex}.title`, (prev) => prev + "");
 }

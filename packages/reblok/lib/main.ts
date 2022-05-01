@@ -6,6 +6,7 @@ import {
   ConcurrentController,
   ConcurrentMode,
   Create,
+  Data,
   DehydratedDataCollection,
   Emitter,
   ExtraActions,
@@ -175,8 +176,33 @@ export const throttle =
   };
 
 const abortControllerSupported = typeof AbortController !== "undefined";
-function createUpdateContext(): UpdateContext {
+type InternalUpdateContext<T> = UpdateContext<T> & {
+  __getUpdate(result: Data<T>): Data<T>;
+};
+function createUpdateContext<T>(
+  prev: T,
+  parentContext?: UpdateContext<any>
+): InternalUpdateContext<T> {
   let abortController: AbortController | undefined;
+  let hasClonedData = false;
+  let cloned: T;
+
+  function clone() {
+    if (!hasClonedData) {
+      hasClonedData = true;
+      cloned = Array.isArray(prev) ? ([...prev] as unknown as T) : ({} as T);
+    }
+    return cloned;
+  }
+
+  function __getUpdate(result: Data<T>): Data<T> {
+    return (hasClonedData ? cloned : result) as Data<T>;
+  }
+
+  if (parentContext) {
+    return { ...parentContext, clone, __getUpdate };
+  }
+
   return {
     get signal() {
       if (!abortController && abortControllerSupported) {
@@ -187,6 +213,8 @@ function createUpdateContext(): UpdateContext {
     cancel() {
       abortController?.abort();
     },
+    clone,
+    __getUpdate,
   };
 }
 
@@ -221,7 +249,7 @@ export function create<TData, TProps, TActions extends Actions<TData>>(
   let waitPromise: Promise<TData> | undefined;
   let lazyInit = typeof initialData === "function";
   let initialized = !lazyInit;
-  let lastUpdateContext: UpdateContext | undefined;
+  let lastUpdateContext: UpdateContext<TData> | undefined;
   let concurrentController: ConcurrentController | void;
   let autoRefreshTimer: any;
   let disposed = false;
@@ -337,7 +365,7 @@ export function create<TData, TProps, TActions extends Actions<TData>>(
         let originalUpdateData: UpdateData<TData>;
         [path, originalUpdateData, mode] = args;
         const parts = path.split(".");
-        nextData = (prev: any, context) => {
+        nextData = (prev: any, parentContext) => {
           const updateNested = (prevNestedData: any, nextNestedData: any) => {
             if (prevNestedData === nextNestedData) return prev;
             const stack: any[] = [prev];
@@ -347,17 +375,21 @@ export function create<TData, TProps, TActions extends Actions<TData>>(
             }
             parent = nextNestedData;
             for (let i = parts.length - 1; i >= 0; i--) {
-              parent = immutableAssign(stack.pop(), parts[i], parent);
+              const part = parts[i];
+              parent = immutableAssign(stack.pop(), part, parent);
             }
             return parent;
           };
 
           if (typeof originalUpdateData === "function") {
             const prevNestedData = getByPath(parts);
-            const nextNestedData: any = (originalUpdateData as Updater<TData>)(
+            const context = createUpdateContext(prevNestedData, parentContext);
+            const updateResult = (originalUpdateData as Updater<TData>)(
               prevNestedData,
               context
             );
+
+            const nextNestedData: any = context.__getUpdate(updateResult);
 
             if (typeof nextNestedData?.then === "function") {
               return nextNestedData.then((value: any) =>
@@ -386,8 +418,13 @@ export function create<TData, TProps, TActions extends Actions<TData>>(
 
       try {
         if (typeof nextData === "function") {
-          const updateContext = createUpdateContext();
-          nextData = (nextData as Updater<TData>)(blok.data, updateContext);
+          const prev = blok.data;
+          const updateContext = createUpdateContext(prev);
+          const updateResult = (nextData as Updater<TData>)(
+            prev,
+            updateContext
+          );
+          nextData = updateContext.__getUpdate(updateResult);
         }
       } catch (e) {
         changeState({ loading: false, error: e });
@@ -468,7 +505,7 @@ export function create<TData, TProps, TActions extends Actions<TData>>(
       return errorPromise;
     },
     local: function Local(customData?) {
-      const blokRef = useRef<any>();
+      const blokRef = useRef<Blok>();
       if (!blokRef.current) {
         blokRef.current = create(
           arguments.length ? (customData as any) : initialData,
@@ -477,6 +514,9 @@ export function create<TData, TProps, TActions extends Actions<TData>>(
       }
       // always re-render
       blokRef.current.use(() => ({}));
+
+      useEffect(() => blokRef.current?.dispose, []);
+
       return blokRef.current;
     },
     use: function Use(...args: any[]) {
